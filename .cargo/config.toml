@@ -1,0 +1,1 @@
+rustflags = ["-L/usr/local/opt/libpq/lib"]
