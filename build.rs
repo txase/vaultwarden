@@ -52,6 +52,32 @@ fn main() {
         println!("cargo:rustc-env=VW_VERSION={version}");
         println!("cargo:rustc-env=CARGO_PKG_VERSION={version}");
     }
+
+    println!("cargo:rustc-link-search=/usr/lib/aarch64-linux-gnu");
+    println!("cargo:rustc-link-search=/usr/lib/postgresql/16/lib");
+    println!("cargo:rustc-link-lib=static=gnutls"); // from ldap
+                                                    // --print-requires-private: nettle hogweed libtasn1 libidn2 p11-kit-1
+                                                    // --static --libs: -lgnutls -lgmp -lunistring -latomic -lnettle -lhogweed -lgmp -lnettle -ltasn1 -lidn2 -lunistring -lp11-kit
+    println!("cargo:rustc-link-lib=static=gss"); // from pq via gssapi_krb5
+    println!("cargo:rustc-link-lib=static=hogweed"); // from gnutls
+    println!("cargo:rustc-link-lib=static=idn");
+    println!("cargo:rustc-link-lib=static=lber"); // from lber
+    println!("cargo:rustc-link-lib=static=ldap"); // from pq, --static --libs: -lldap -lsasl2 -lgnutls -llber
+    println!("cargo:rustc-link-lib=static=nettle"); // from gnutls
+    println!("cargo:rustc-link-lib=static=pgcommon"); // from pq
+    println!("cargo:rustc-link-lib=static=pgport"); // from pq
+    println!("cargo:rustc-link-lib=static=pq"); // --static --libs: -lpq -L/usr/lib/llvm-17/lib -lpgcommon -lpgport -lssl -lgssapi_krb5 -lm -lldap -lssl -ldl -pthread -lcrypto -ldl -pthread
+    println!("cargo:rustc-link-lib=static=sasl2"); // from ldap
+    println!("cargo:rustc-link-lib=static=shishi");
+    println!("cargo:rustc-link-lib=crypto"); // from pq
+    println!("cargo:rustc-link-lib=gcrypt"); // --static --libs: -lgcrypt -lgpg-error
+    println!("cargo:rustc-link-lib=gmp"); // from gnutls
+    println!("cargo:rustc-link-lib=gpg-error"); // from gcrypt
+    println!("cargo:rustc-link-lib=idn2"); // from gnutls, --static --libs: -lidn2 -lunistring
+    println!("cargo:rustc-link-lib=p11-kit"); // from gnutls
+    println!("cargo:rustc-link-lib=ssl"); // from pq
+    println!("cargo:rustc-link-lib=tasn1"); // from gnutls
+    println!("cargo:rustc-link-lib=unistring"); // from gnutls, idn2
 }
 
 fn run(args: &[&str]) -> Result<String, std::io::Error> {

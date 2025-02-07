@@ -1,0 +1,134 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  AWS CloudFormation template for running VaultWarden on AWS serverless services.
+
+Parameters:
+  DSQLClusterId:
+    Type: String
+    Description: The endpoint of the DSQL database.
+    AllowedPattern: '[a-z0-9]+'
+  APILogRetention:
+    Type: Number
+    Description: The number of days to retain the API logs. -1 means to never expire.
+    Default: -1
+    AllowedValues: [-1, 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653]
+
+Conditions:
+  IsApiLogRetentionNeverExpire: !Equals
+    - !Ref APILogRetention
+    - -1
+
+Resources:
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - BucketKeyEnabled: true
+            ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+      BucketName: !Sub ${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-data
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods:
+              - GET
+              - HEAD
+            AllowedOrigins:
+              - '*'
+      LifecycleConfiguration:
+        Rules:
+          - AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 2
+            ExpiredObjectDeleteMarker: true
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+            Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+
+  DataBucketEnforceEncryptionAndStorageTier:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyUnencryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub arn:${AWS::Partition}:s3:::${DataBucket}/*
+            Condition:
+              'Null':
+                s3:x-amz-server-side-encryption-aws-kms-key-id: true
+          - Sid: DenyUnencryptedTransit
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${DataBucket}
+              - !Sub arn:${AWS::Partition}:s3:::${DataBucket}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+          - Sid: DenyNonIntelligentTieringStorageClass
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub arn:aws:s3:::${DataBucket}/*
+            Condition:
+              StringNotEquals:
+                s3:x-amz-storage-class: INTELLIGENT_TIERING
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: vaultwarden-lambda.zip
+      Handler: bootstrap
+      Runtime: provided.al2023
+      Architectures:
+        - arm64
+      Layers:
+        - !Sub arn:aws:lambda:${AWS::Region}:753240598075:layer:LambdaAdapterLayerArm64:24
+      Environment:
+        Variables:
+          AWS_LWA_PORT: 8000
+          AWS_LWA_READINESS_CHECK_PATH: /alive
+          AWS_LWA_ASYNC_INIT: true
+          AWS_LWA_ENABLE_COMPRESSION: true
+          AWS_LWA_INVOKE_MODE: RESPONSE_STREAM
+          DATA_FOLDER: !Sub s3://${DataBucket}
+          TMP_FOLDER: /tmp
+          DATABASE_URL: dsql://${DSQLClusterId}.dsql.${AWS::Region}.on.aws
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: RESPONSE_STREAM
+      MemorySize: 3538 # Equivalent to 2 vCPUs; Higher vCPus decreases cold start time
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+                - s3:DeleteObject
+              Resource: !Sub arn:${AWS::Partition}:s3:::${DataBucket}/*
+            - Effect: Allow
+              Action: dsql:DbConnect
+              Resource: !Sub arn:${AWS::Partition}:dsql:${AWS::Region}:${AWS::AccountId}:cluster/${DSQLClusterId}
+
+  ApiFunctionLogs:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: RetainExceptOnCreate
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ApiFunction}
+      RetentionInDays: !If
+        - IsApiLogRetentionNeverExpire
+        - !Ref AWS::NoValue
+        - !Ref APILogRetention

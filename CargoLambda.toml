@@ -1,0 +1,7 @@
+[build]
+features = ["aws", "vendored_openssl"]
+release = true
+arm64 = true
+
+[build.compiler]
+type = "cargo"

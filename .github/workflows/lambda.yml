@@ -1,0 +1,51 @@
+name: Build Lambda Package
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        channel:
+          - "rust-toolchain" # The version defined in rust-toolchain
+
+    name: Build ${{ matrix.channel }}
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: Install development packages
+        uses: awalsh128/cache-apt-pkgs-action@v1.4.3
+        with:
+          packages: openssl build-essential libgss-dev libldap-dev libgcrypt20-dev libpq-dev libsasl2-dev libssl-dev libunistring-dev pkg-config postgresql-server-dev-16
+
+      - name: Install mold
+        uses: rui314/setup-mold@v1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Zig toolchain
+        uses: mlugg/setup-zig@v1
+
+      - name: Install Cargo Lambda
+        uses: jaxxstorm/action-install-gh-release@v1.9.0
+        with:
+          repo: cargo-lambda/cargo-lambda
+          platform: linux
+          arch: aarch64
+
+      - name: Setup rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build with Cargo
+        run: cargo lambda build --verbose
+
+      - name: Archive function package
+        uses: actions/upload-artifact@v4
+        with:
+          name: vaultwarden-lambda
+          path: target/lambda/vaultwarden/bootstrap
