@@ -74,6 +74,12 @@ impl Fairing for AppHeaders {
             // 2FA/MFA Site check: api.2fa.directory
             // # Mail Relay: https://bitwarden.com/blog/add-privacy-and-security-using-email-aliases-with-bitwarden/
             // app.simplelogin.io, app.addy.io, api.fastmail.com, quack.duckduckgo.com
+
+            #[cfg(s3)]
+            let s3_connect_src = "https://*.amazonaws.com";
+            #[cfg(not(s3))]
+            let s3_connect_src = "";
+
             let csp = format!(
                 "default-src 'self'; \
                 base-uri 'self'; \
@@ -98,6 +104,7 @@ impl Fairing for AppHeaders {
                   https://app.addy.io/api/ \
                   https://api.fastmail.com/ \
                   https://api.forwardemail.net \
+                  {s3_connect_src} \
                   {allowed_connect_src};\
                 ",
                 icon_service_csp = CONFIG._icon_service_csp(),

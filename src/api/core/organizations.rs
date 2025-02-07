@@ -11,6 +11,7 @@ use crate::{
     },
     auth::{decode_invite, AdminHeaders, ClientVersion, Headers, ManagerHeaders, ManagerHeadersLoose, OwnerHeaders},
     db::{models::*, DbConn},
+    error::Error,
     mail,
     util::{convert_json_key_lcase_first, NumberOrString},
     CONFIG,
@@ -735,22 +736,22 @@ async fn get_org_details(data: OrgIdData, headers: Headers, mut conn: DbConn) ->
     }
 
     Ok(Json(json!({
-        "data": _get_org_details(&data.organization_id, &headers.host, &headers.user.uuid, &mut conn).await,
+        "data": _get_org_details(&data.organization_id, &headers.host, &headers.user.uuid, &mut conn).await?,
         "object": "list",
         "continuationToken": null,
     })))
 }
 
-async fn _get_org_details(org_id: &str, host: &str, user_uuid: &str, conn: &mut DbConn) -> Value {
+async fn _get_org_details(org_id: &str, host: &str, user_uuid: &str, conn: &mut DbConn) -> Result<Value, Error> {
     let ciphers = Cipher::find_by_org(org_id, conn).await;
     let cipher_sync_data = CipherSyncData::new(user_uuid, CipherSyncType::Organization, conn).await;
 
     let mut ciphers_json = Vec::with_capacity(ciphers.len());
     for c in ciphers {
         ciphers_json
-            .push(c.to_json(host, user_uuid, Some(&cipher_sync_data), CipherSyncType::Organization, conn).await);
+            .push(c.to_json(host, user_uuid, Some(&cipher_sync_data), CipherSyncType::Organization, conn).await?);
     }
-    json!(ciphers_json)
+    Ok(json!(ciphers_json))
 }
 
 #[derive(FromForm)]
@@ -2943,7 +2944,7 @@ async fn get_org_export(
     headers: AdminHeaders,
     client_version: Option<ClientVersion>,
     mut conn: DbConn,
-) -> Json<Value> {
+) -> JsonResult {
     // Since version v2023.1.0 the format of the export is different.
     // Also, this endpoint was created since v2022.9.0.
     // Therefore, we will check for any version smaller then v2023.1.0 and return a different response.
@@ -2959,24 +2960,24 @@ async fn get_org_export(
     // Also both main keys here need to be lowercase, else the export will fail.
     if use_list_response_model {
         // Backwards compatible pre v2023.1.0 response
-        Json(json!({
+        Ok(Json(json!({
             "collections": {
                 "data": convert_json_key_lcase_first(_get_org_collections(org_id, &mut conn).await),
                 "object": "list",
                 "continuationToken": null,
             },
             "ciphers": {
-                "data": convert_json_key_lcase_first(_get_org_details(org_id, &headers.host, &headers.user.uuid, &mut conn).await),
+                "data": convert_json_key_lcase_first(_get_org_details(org_id, &headers.host, &headers.user.uuid, &mut conn).await?),
                 "object": "list",
                 "continuationToken": null,
             }
-        }))
+        })))
     } else {
         // v2023.1.0 and newer response
-        Json(json!({
+        Ok(Json(json!({
             "collections": convert_json_key_lcase_first(_get_org_collections(org_id, &mut conn).await),
-            "ciphers": convert_json_key_lcase_first(_get_org_details(org_id, &headers.host, &headers.user.uuid, &mut conn).await),
-        }))
+            "ciphers": convert_json_key_lcase_first(_get_org_details(org_id, &headers.host, &headers.user.uuid, &mut conn).await?),
+        })))
     }
 }
 

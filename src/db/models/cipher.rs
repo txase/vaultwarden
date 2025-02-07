@@ -128,7 +128,7 @@ impl Cipher {
 use crate::db::DbConn;
 
 use crate::api::EmptyResult;
-use crate::error::MapResult;
+use crate::error::{Error, MapResult};
 
 /// Database methods
 impl Cipher {
@@ -139,18 +139,28 @@ impl Cipher {
         cipher_sync_data: Option<&CipherSyncData>,
         sync_type: CipherSyncType,
         conn: &mut DbConn,
-    ) -> Value {
+    ) -> Result<Value, Error> {
         use crate::util::format_date;
 
         let mut attachments_json: Value = Value::Null;
         if let Some(cipher_sync_data) = cipher_sync_data {
             if let Some(attachments) = cipher_sync_data.cipher_attachments.get(&self.uuid) {
-                attachments_json = attachments.iter().map(|c| c.to_json(host)).collect();
+                if !attachments.is_empty() {
+                    let mut attachments_json_vec = vec![];
+                    for attachment in attachments {
+                        attachments_json_vec.push(attachment.to_json(host).await?);
+                    }
+                    attachments_json = Value::Array(attachments_json_vec);
+                }
             }
         } else {
             let attachments = Attachment::find_by_cipher(&self.uuid, conn).await;
             if !attachments.is_empty() {
-                attachments_json = attachments.iter().map(|c| c.to_json(host)).collect()
+                let mut attachments_json_vec = vec![];
+                for attachment in attachments {
+                    attachments_json_vec.push(attachment.to_json(host).await?);
+                }
+                attachments_json = Value::Array(attachments_json_vec);
             }
         }
 
@@ -361,7 +371,7 @@ impl Cipher {
         };
 
         json_object[key] = type_data_json;
-        json_object
+        Ok(json_object)
     }
 
     pub async fn update_users_revision(&self, conn: &mut DbConn) -> Vec<String> {

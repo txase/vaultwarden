@@ -577,7 +577,7 @@ async fn view_emergency_access(emer_id: &str, headers: Headers, mut conn: DbConn
                 CipherSyncType::User,
                 &mut conn,
             )
-            .await,
+            .await?,
         );
     }
 
