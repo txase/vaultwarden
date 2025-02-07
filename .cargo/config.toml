@@ -1,1 +1,6 @@
-rustflags = ["-L/usr/local/opt/libpq/lib"]
+[target.x86_64-apple-darwin]
+linker = "clang"
+rustflags = ["-D", "warnings", "-C", "link-arg=-ld_new", "-L/usr/local/opt/libpq/lib"]
+
+[target.aarch64-apple-darwin]
+rustflags = ["-D", "warnings", "-C", "link-arg=-ld_new", "-L/usr/local/opt/libpq/lib"]
