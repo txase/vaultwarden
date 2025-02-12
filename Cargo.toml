@@ -18,10 +18,11 @@ build = "build.rs"
 enable_syslog = []
 mysql = ["diesel/mysql", "diesel_migrations/mysql"]
 postgresql = ["diesel/postgres", "diesel_migrations/postgres"]
-aws = ["dsql", "s3"]
+aws = ["dsql", "s3", "ses"]
 dsql = ["postgresql", "dep:aws-config", "dep:aws-sdk-dsql"]
 sqlite = ["diesel/sqlite", "diesel_migrations/sqlite", "dep:libsqlite3-sys"]
 s3 = ["dep:aws-config", "dep:aws-sdk-s3"]
+ses = ["dep:aws-config", "dep:aws-sdk-sesv2"]
 # Enable to use a vendored and statically linked openssl
 vendored_openssl = ["openssl/vendored"]
 # Enable MiMalloc memory allocator to replace the default malloc
@@ -84,10 +85,11 @@ diesel_logger = { version = "0.4.0", optional = true }
 # Bundled/Static SQLite
 libsqlite3-sys = { version = "0.30.1", features = ["bundled"], optional = true }
 
-# AWS / Amazon Aurora DSQL
+# AWS Services
 aws-config = { version = "1.5.12", features = ["behavior-version-latest"], optional = true }
 aws-sdk-s3 = { version = "1.72.0", features = ["behavior-version-latest"], optional = true }
 aws-sdk-dsql = { version = "1.2.0", features = ["behavior-version-latest"], optional = true }
+aws-sdk-sesv2 = { version = "1.65.0", features = ["behavior-version-latest"], optional = true }
 
 # Crypto-related libraries
 rand = { version = "0.8.5", features = ["small_rng"] }

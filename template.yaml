@@ -25,6 +25,14 @@ Parameters:
     Type: String
     Description: Token for the admin interface, preferably an Argon2 PCH string. If empty, the admin interface will be disabled.
     Default: ''
+  SMTPFrom:
+    Type: String
+    Description: The email address to send emails from. Email service is disabled if this value is empty.
+    Default: ''
+  SMTPFromName:
+    Type: String
+    Description: The name to send emails from.
+    Default: Vaultwarden
   AllowedIframeAncestors:
     Type: String
     Description: Allowed iframe ancestors (Know the risks!).
@@ -57,6 +65,10 @@ Conditions:
   IsAdminTokenEmpty: !Equals
     - !Ref AdminToken
     - ''
+  IsEmailEnabled: !Not
+    - !Equals
+      - !Ref SMTPFrom
+      - ''
 
 Resources:
   DataBucket:
@@ -154,6 +166,12 @@ Resources:
             - IsAdminTokenEmpty
             - !Ref AWS::NoValue
             - !Ref AdminToken
+          SMTP_FROM: !If
+            - IsEmailEnabled
+            - !Ref SMTPFrom
+            - !Ref AWS::NoValue
+          SMTP_FROM_NAME: !Ref SMTPFromName
+          USE_AWS_SES: true
       FunctionUrlConfig:
         AuthType: NONE
         InvokeMode: RESPONSE_STREAM
@@ -170,6 +188,15 @@ Resources:
             - Effect: Allow
               Action: dsql:DbConnectAdmin
               Resource: !Sub arn:${AWS::Partition}:dsql:${AWS::Region}:${AWS::AccountId}:cluster/${DSQLClusterId}
+            - !If
+                - IsEmailEnabled
+                - Effect: Allow
+                  Action: ses:SendRawEmail
+                  Resource: !Sub arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SMTPFrom}
+                  Condition:
+                    StringEquals:
+                      ses:FromDisplayName: !Ref SMTPFromName
+                - !Ref AWS::NoValue
       Timeout: 30
 
   ApiFunctionLogs:
