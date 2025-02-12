@@ -3,6 +3,19 @@ Transform: AWS::Serverless-2016-10-31
 Description: AWS CloudFormation template for running VaultWarden on AWS serverless services.
 
 Parameters:
+  Domain:
+    Type: String
+    Description: >-
+      The domain name for the Vaultwarden instance (e.g. https://example.com). If this parameter or the ACMCertificateArn
+      parameter are left empty, the Vaultwarden instance can still be reached at the output CDN domain
+      (e.g. https://xxxxxxxx.cloudfront.net).
+    AllowedPattern: (https://[a-z0-9.-]+|)
+    Default: ''
+  ACMCertificateArn:
+    Type: String
+    Description: The ARN of a us-east-1 ACM certificate to use for the domain. Required if the `Domain` parameter is set.
+    AllowedPattern: (arn:aws:acm:us-east-1:[0-9]+:certificate/[0-9a-f-]+|)
+    Default: ''
   DSQLClusterId:
     Type: String
     Description: The endpoint of the DSQL database.
@@ -54,6 +67,9 @@ Mappings:
       CSP: https://www.google.com/s2/favicons https://*.gstatic.com/favicon
 
 Conditions:
+  IsDomainAndCertificateSet: !And
+    - !Not [!Equals [!Ref Domain, '']]
+    - !Not [!Equals [!Ref ACMCertificateArn, '']]
   IsApiLogRetentionNeverExpire: !Equals
     - !Ref APILogRetention
     - -1
@@ -158,6 +174,10 @@ Resources:
           TMP_FOLDER: /tmp
           DATABASE_URL: !Sub dsql://${DSQLClusterId}.dsql.${AWS::Region}.on.aws
           ENABLE_WEBSOCKET: false
+          DOMAIN: !If
+            - IsDomainAndCertificateSet
+            - !Ref Domain
+            - !Ref AWS::NoValue
           SIGNUPS_ALLOWED: !Ref SignupsAllowed
           IP_HEADER: X-Forwarded-For
           ICON_SERVICE: !Ref IconService
@@ -360,6 +380,14 @@ Resources:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
+        Aliases: !If
+          - IsDomainAndCertificateSet
+          - - !Select
+                - 2
+                - !Split
+                    - /
+                    - !Ref Domain
+          - !Ref AWS::NoValue
         CacheBehaviors:
           - AllowedMethods:
               - DELETE
@@ -501,6 +529,12 @@ Resources:
                   - /
                   - !GetAtt ApiFunctionUrl.FunctionUrl
         PriceClass: PriceClass_All
+        ViewerCertificate: !If
+          - IsDomainAndCertificateSet
+          - AcmCertificateArn: !Ref ACMCertificateArn
+            MinimumProtocolVersion: TLSv1.2_2021
+            SslSupportMethod: sni-only
+          - !Ref AWS::NoValue
 
   WebVaultAssetsBucketPolicyCloudFrontAccess:
     Type: AWS::S3::BucketPolicy
@@ -518,3 +552,7 @@ Resources:
             Condition:
               StringEquals:
                 AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${CDN.Id}
+
+Outputs:
+  CDNDomain:
+    Value: !GetAtt CDN.DomainName
