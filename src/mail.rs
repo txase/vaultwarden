@@ -651,7 +651,10 @@ async fn send_with_selected_transport(email: Message) -> EmptyResult {
         }
 
         #[cfg(not(ses))]
-        unreachable!("AWS SES is not available in this build")
+        {
+            // This should never be reached due to config validation preventing USE_AWS_SES without ses feature
+            unreachable!("AWS SES is not available: config validation should prevent this")
+        }
     } else {
         match smtp_transport().send(email).await {
             Ok(_) => Ok(()),

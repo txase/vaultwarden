@@ -920,6 +920,12 @@ fn validate_config(cfg: &ConfigItems) -> Result<(), Error> {
             ),
         }
 
+        // Validate AWS SES feature availability when USE_AWS_SES is set
+        if cfg.use_aws_ses {
+            #[cfg(not(ses))]
+            err!("`USE_AWS_SES` is set, but the `ses` feature is not enabled in this build");
+        }
+
         if cfg.use_sendmail {
             let command = cfg.sendmail_command.clone().unwrap_or_else(|| format!("sendmail{EXE_SUFFIX}"));
 
@@ -953,9 +959,6 @@ fn validate_config(cfg: &ConfigItems) -> Result<(), Error> {
                     }
                 }
             }
-        } else if cfg.use_aws_ses {
-            #[cfg(not(ses))]
-            err!("`USE_AWS_SES` is set, but the `ses` feature is not enabled in this build");
         } else {
             if cfg.smtp_host.is_some() == cfg.smtp_from.is_empty() {
                 err!("Both `SMTP_HOST` and `SMTP_FROM` need to be set for email support without `USE_SENDMAIL`")
